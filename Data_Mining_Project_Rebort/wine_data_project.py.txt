@@ -1,0 +1,245 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import sys
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
+from scipy.cluster.hierarchy import linkage, dendrogram
+
+
+# =========================
+# 1) Load Data
+# =========================
+df = pd.read_csv("wine.data", header=None)
+
+# Ignore class column (first column)
+X = df.iloc[:, 1:]
+
+print("Original data shape:", df.shape)
+print("Data used for clustering shape:", X.shape)
+print("\nFirst 5 rows:")
+print(X.head())
+
+
+# =========================
+# 2) Basic Data Analysis
+# =========================
+print("\nData info:")
+print(X.info())
+
+print("\nDescriptive statistics:")
+print(X.describe())
+
+print("\nMissing values:")
+print(X.isnull().sum())
+
+
+# =========================
+# 3) Plots: Histogram
+# =========================
+X.hist(figsize=(12, 10))
+plt.suptitle("Histogram of Features", fontsize=16)
+plt.tight_layout()
+plt.savefig("histogram.png")
+plt.show()
+
+
+# =========================
+# 4) Plots: Correlation Heatmap
+# =========================
+plt.figure(figsize=(10, 8))
+sns.heatmap(X.corr(), cmap="coolwarm")
+plt.title("Correlation Heatmap")
+plt.tight_layout()
+plt.savefig("heatmap.png")
+plt.show()
+
+
+# =========================
+# 5) Before Preprocessing
+# =========================
+kmeans_raw = KMeans(n_clusters=3, random_state=42)
+labels_raw = kmeans_raw.fit_predict(X)
+score_raw = silhouette_score(X, labels_raw)
+
+print("\nKMeans before preprocessing:")
+print("Silhouette Score =", score_raw)
+
+
+# =========================
+# 6) Scaling
+# =========================
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+kmeans_scaled = KMeans(n_clusters=3, random_state=42)
+labels_scaled = kmeans_scaled.fit_predict(X_scaled)
+score_scaled = silhouette_score(X_scaled, labels_scaled)
+
+print("\nKMeans after scaling:")
+print("Silhouette Score =", score_scaled)
+
+
+# =========================
+# 7) PCA
+# =========================
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+
+print("\nPCA shape:", X_pca.shape)
+print("Explained variance ratio:", pca.explained_variance_ratio_)
+
+plt.figure(figsize=(8, 6))
+plt.scatter(X_pca[:, 0], X_pca[:, 1])
+plt.title("PCA Projection")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.tight_layout()
+plt.savefig("pca.png")
+plt.show()
+
+
+# =========================
+# 8) K-Means Clustering
+# =========================
+kmeans = KMeans(n_clusters=3, random_state=42)
+labels_k = kmeans.fit_predict(X_scaled)
+score_k = silhouette_score(X_scaled, labels_k)
+
+print("\nKMeans Clustering:")
+print("Silhouette Score =", score_k)
+
+plt.figure(figsize=(8, 6))
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=labels_k)
+plt.title("KMeans Clustering")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.tight_layout()
+plt.savefig("kmeans.png")
+plt.show()
+
+
+# =========================
+# 9) Elbow Method
+# =========================
+inertia = []
+
+for k in range(1, 10):
+    km = KMeans(n_clusters=k, random_state=42)
+    km.fit(X_scaled)
+    inertia.append(km.inertia_)
+
+plt.figure(figsize=(8, 6))
+plt.plot(range(1, 10), inertia, marker='o')
+plt.title("Elbow Method")
+plt.xlabel("Number of Clusters (K)")
+plt.ylabel("Inertia")
+plt.tight_layout()
+plt.savefig("elbow.png")
+plt.show()
+
+
+# =========================
+# 10) KMeans after PCA
+# =========================
+kmeans_pca = KMeans(n_clusters=3, random_state=42)
+labels_pca = kmeans_pca.fit_predict(X_pca)
+score_pca = silhouette_score(X_pca, labels_pca)
+
+print("\nKMeans after PCA:")
+print("Silhouette Score =", score_pca)
+
+plt.figure(figsize=(8, 6))
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=labels_pca)
+plt.title("KMeans after PCA")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.tight_layout()
+plt.savefig("kmeans_pca.png")
+plt.show()
+
+
+# =========================
+# 11) DBSCAN
+# =========================
+db = DBSCAN(eps=0.5, min_samples=5)
+labels_db = db.fit_predict(X_scaled)
+
+plt.figure(figsize=(8, 6))
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=labels_db)
+plt.title("DBSCAN Clustering")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.tight_layout()
+plt.savefig("dbscan.png")
+plt.show()
+
+# Remove noise points (-1) before silhouette score
+mask = labels_db != -1
+X_db = X_scaled[mask]
+labels_db_clean = labels_db[mask]
+
+print("\nDBSCAN Clustering:")
+if len(set(labels_db_clean)) > 1:
+    score_db = silhouette_score(X_db, labels_db_clean)
+    print("Silhouette Score =", score_db)
+else:
+    score_db = None
+    print("DBSCAN could not form valid clusters")
+
+
+# =========================
+# 12) Hierarchical Clustering
+# =========================
+linked = linkage(X_scaled, method='ward')
+
+plt.figure(figsize=(10, 7))
+dendrogram(linked)
+plt.title("Dendrogram")
+plt.xlabel("Samples")
+plt.ylabel("Distance")
+plt.tight_layout()
+plt.savefig("dendrogram.png")
+plt.show()
+
+hc = AgglomerativeClustering(n_clusters=3)
+labels_hc = hc.fit_predict(X_scaled)
+score_hc = silhouette_score(X_scaled, labels_hc)
+
+print("\nHierarchical Clustering:")
+print("Silhouette Score =", score_hc)
+
+plt.figure(figsize=(8, 6))
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=labels_hc)
+plt.title("Hierarchical Clustering")
+plt.xlabel("PC1")
+plt.ylabel("PC2")
+plt.tight_layout()
+plt.savefig("hierarchical.png")
+plt.show()
+
+
+# =========================
+# 13) Final Comparison
+# =========================
+print("\nFinal Comparison:")
+print("KMeans before preprocessing =", score_raw)
+print("KMeans after scaling       =", score_scaled)
+print("KMeans after PCA           =", score_pca)
+print("Hierarchical               =", score_hc)
+
+if score_db is not None:
+    print("DBSCAN                     =", score_db)
+else:
+    print("DBSCAN                     = Could not form valid clusters")
+
+
+# =========================
+# 14) Python Version
+# =========================
+print("\nPython Version:")
+print(sys.version)
